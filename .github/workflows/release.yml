@@ -25,16 +25,14 @@ jobs:
       shell: pwsh
       run: |
         $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=WhisperGUI" -KeyUsage DigitalSignature -FriendlyName "WhisperGUI Cert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-        $pwd = ConvertTo-SecureString -String "password" -Force -AsPlainText
-        Export-PfxCertificate -Cert $cert -FilePath "WhisperGUI_TemporaryKey.pfx" -Password $pwd
-        # Base64 encode to make it easily consumable by the build system if needed, or just use the generated file
-        echo "CERT_PATH=$PWD\WhisperGUI_TemporaryKey.pfx" >> $env:GITHUB_ENV
+        # Capture thumbprint — cert is already in the store, no PFX import needed
+        echo "CERT_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
 
     - name: Build and Package MSIX
       shell: pwsh
       run: |
         cd WhisperGUI
-        dotnet publish -c Release -f net9.0-windows10.0.19041.0 -r win-x64 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageDir="../AppPackages" /p:AppxBundle=Always /p:PackageCertificateKeyFile="..\WhisperGUI_TemporaryKey.pfx" /p:PackageCertificatePassword="password" /p:UapAppxPackageBuildMode=SideloadOnly /p:Platform=x64
+        dotnet publish -c Release -f net9.0-windows10.0.19041.0 -r win-x64 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageDir="../AppPackages" /p:AppxBundle=Always /p:PackageCertificateThumbprint="${{ env.CERT_THUMBPRINT }}" /p:UapAppxPackageBuildMode=SideloadOnly /p:Platform=x64
 
     - name: Upload MSIX to Artifacts
       uses: actions/upload-artifact@v4.6.2
