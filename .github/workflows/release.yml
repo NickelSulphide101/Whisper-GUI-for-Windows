@@ -1,0 +1,48 @@
+name: Build and Release MSIX
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '9.0.x'
+
+    - name: Create Self-Signed Certificate
+      shell: pwsh
+      run: |
+        $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=WhisperGUI" -KeyUsage DigitalSignature -FriendlyName "WhisperGUI Cert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+        $pwd = ConvertTo-SecureString -String "password" -Force -AsPlainText
+        Export-PfxCertificate -Cert $cert -FilePath "WhisperGUI_TemporaryKey.pfx" -Password $pwd
+        # Base64 encode to make it easily consumable by the build system if needed, or just use the generated file
+        echo "CERT_PATH=$PWD\WhisperGUI_TemporaryKey.pfx" >> $env:GITHUB_ENV
+
+    - name: Build and Package MSIX
+      run: |
+        cd WhisperGUI
+        dotnet publish -c Release -f net9.0-windows10.0.19041.0 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageDir="../AppPackages" /p:AppxBundle=Always /p:PackageCertificateKeyFile="..\WhisperGUI_TemporaryKey.pfx" /p:PackageCertificatePassword="password" /p:UapAppxPackageBuildMode=SideloadOnly
+
+    - name: Upload MSIX to Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: WhisperGUI-MSIX
+        path: AppPackages/**/*.msixbundle
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: AppPackages/**/*.msixbundle
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
