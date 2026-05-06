@@ -12,16 +12,23 @@ namespace WhisperGUI.Services
     {
         private WhisperFactory _whisperFactory;
         private WhisperProcessor _processor;
-        private readonly string _modelPath = "Assets/ggml-base.bin";
+        // Bug 6 fix: resolve model path relative to app base directory, not working directory
+        private readonly string _modelPath;
 
         public event EventHandler<string> TextRecognized;
+
+        public TranscriptionService()
+        {
+            _modelPath = Path.Combine(AppContext.BaseDirectory, "Assets", "ggml-base.bin");
+        }
 
         public async Task InitializeAsync()
         {
             // Check if model exists, if not, maybe download it
             if (!File.Exists(_modelPath))
             {
-                if (!Directory.Exists("Assets")) Directory.CreateDirectory("Assets");
+                var assetsDir = Path.GetDirectoryName(_modelPath)!;
+                if (!Directory.Exists(assetsDir)) Directory.CreateDirectory(assetsDir);
                 using var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Base);
                 using var fileWriter = File.OpenWrite(_modelPath);
                 await modelStream.CopyToAsync(fileWriter);
@@ -50,6 +57,55 @@ namespace WhisperGUI.Services
 
             // In a real application, you'd feed this into a continuous stream or VAD buffer.
             // This is simplified to show integration.
+        }
+
+        /// <summary>
+        /// Transcribes raw PCM audio data (16kHz, 16-bit, mono).
+        /// Bug 2 fix: new method to support microphone recording transcription.
+        /// </summary>
+        public async Task TranscribePcmAsync(byte[] pcmData, CancellationToken cancellationToken)
+        {
+            // Convert 16-bit PCM to float32 samples that Whisper expects
+            float[] floatSamples = new float[pcmData.Length / 2];
+            for (int i = 0; i < floatSamples.Length; i++)
+            {
+                short sample = BitConverter.ToInt16(pcmData, i * 2);
+                floatSamples[i] = sample / 32768.0f;
+            }
+
+            // Write as a proper WAV file to a MemoryStream for Whisper processing
+            using var memStream = new MemoryStream();
+            using (var writer = new BinaryWriter(memStream, System.Text.Encoding.UTF8, leaveOpen: true))
+            {
+                // WAV header for 16kHz, 16-bit, mono PCM
+                int sampleRate = 16000;
+                short bitsPerSample = 16;
+                short channels = 1;
+                int dataSize = pcmData.Length;
+                int byteRate = sampleRate * channels * bitsPerSample / 8;
+                short blockAlign = (short)(channels * bitsPerSample / 8);
+
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("RIFF"));
+                writer.Write(36 + dataSize);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
+                writer.Write(16); // chunk size
+                writer.Write((short)1); // PCM format
+                writer.Write(channels);
+                writer.Write(sampleRate);
+                writer.Write(byteRate);
+                writer.Write(blockAlign);
+                writer.Write(bitsPerSample);
+                writer.Write(System.Text.Encoding.ASCII.GetBytes("data"));
+                writer.Write(dataSize);
+                writer.Write(pcmData);
+            }
+
+            memStream.Position = 0;
+            await foreach (var result in _processor.ProcessAsync(memStream, cancellationToken))
+            {
+                TextRecognized?.Invoke(this, $"{result.Start}->{result.End}: {result.Text}");
+            }
         }
 
         /// <summary>

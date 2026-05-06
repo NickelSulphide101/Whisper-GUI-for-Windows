@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,6 +16,8 @@ namespace WhisperGUI
         private TranscriptionService _transcriptionService;
         private bool _isRecording = false;
         private CancellationTokenSource _cts;
+        // Bug 2 fix: accumulate audio chunks during recording
+        private List<byte[]> _recordedChunks = new();
 
         public MainWindow()
         {
@@ -27,6 +30,10 @@ namespace WhisperGUI
             _transcriptionService = new TranscriptionService();
 
             _transcriptionService.TextRecognized += OnTextRecognized;
+            // Bug 2 fix: subscribe to audio data events
+            _audioService.AudioDataAvailable += OnAudioDataAvailable;
+            // Bug 1 fix: register window closed handler
+            this.Closed += Window_Closed;
             
             InitializeServicesAsync();
         }
@@ -64,11 +71,18 @@ namespace WhisperGUI
             });
         }
 
-        private void RecordButton_Click(object sender, RoutedEventArgs e)
+        // Bug 2 fix: collect audio data during recording
+        private void OnAudioDataAvailable(object sender, byte[] data)
+        {
+            _recordedChunks.Add(data);
+        }
+
+        private async void RecordButton_Click(object sender, RoutedEventArgs e)
         {
             if (!_isRecording)
             {
                 _isRecording = true;
+                _recordedChunks.Clear();
                 RecordText.Text = "停止录音";
                 RecordIcon.Glyph = "\xE71A"; // Stop icon
                 _audioService.StartRecording();
@@ -79,11 +93,45 @@ namespace WhisperGUI
                 RecordText.Text = "开始录音";
                 RecordIcon.Glyph = "\xE720"; // Mic icon
                 _audioService.StopRecording();
+
+                // Bug 2 fix: feed recorded audio to transcription service
+                if (_recordedChunks.Count > 0)
+                {
+                    OutputTextBox.Text += "正在转录录音...\n";
+                    try
+                    {
+                        // Combine all chunks into a single PCM byte array
+                        int totalLength = 0;
+                        foreach (var chunk in _recordedChunks)
+                            totalLength += chunk.Length;
+
+                        byte[] allPcm = new byte[totalLength];
+                        int offset = 0;
+                        foreach (var chunk in _recordedChunks)
+                        {
+                            Array.Copy(chunk, 0, allPcm, offset, chunk.Length);
+                            offset += chunk.Length;
+                        }
+                        _recordedChunks.Clear();
+
+                        _cts?.Dispose(); // Bug 3 fix: dispose previous CTS
+                        _cts = new CancellationTokenSource();
+                        await _transcriptionService.TranscribePcmAsync(allPcm, _cts.Token);
+                    }
+                    catch (Exception ex)
+                    {
+                        OutputTextBox.Text += $"[转录失败] {ex.Message}\n";
+                    }
+                }
             }
         }
 
         private void CopyButton_Click(object sender, RoutedEventArgs e)
         {
+            // Bug 4 fix: guard against empty/null text
+            if (string.IsNullOrEmpty(OutputTextBox.Text))
+                return;
+
             DataPackage dataPackage = new DataPackage();
             dataPackage.SetText(OutputTextBox.Text);
             Clipboard.SetContent(dataPackage);
@@ -103,6 +151,12 @@ namespace WhisperGUI
             }
         }
 
+        // Bug 5 fix: hide drop overlay when drag leaves
+        private void Grid_DragLeave(object sender, DragEventArgs e)
+        {
+            DropHighlight.Visibility = Visibility.Collapsed;
+        }
+
         private async void Grid_Drop(object sender, DragEventArgs e)
         {
             DropHighlight.Visibility = Visibility.Collapsed;
@@ -117,6 +171,8 @@ namespace WhisperGUI
                     
                     OutputTextBox.Text += $"开始转录: {file.Name}...\n";
                     
+                    // Bug 3 fix: dispose the previous CTS before creating a new one
+                    _cts?.Dispose();
                     _cts = new CancellationTokenSource();
                     try
                     {
@@ -132,6 +188,9 @@ namespace WhisperGUI
 
         private void Window_Closed(object sender, WindowEventArgs args)
         {
+            // Bug 1 fix: cancel running work, stop recording, dispose resources
+            _cts?.Cancel();
+            _cts?.Dispose();
             _audioService?.StopRecording();
             _transcriptionService?.Dispose();
         }

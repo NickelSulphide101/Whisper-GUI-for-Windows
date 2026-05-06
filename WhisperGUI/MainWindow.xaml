@@ -13,6 +13,7 @@
         <Grid x:Name="DragDropOverlay" 
               AllowDrop="True" 
               DragOver="Grid_DragOver" 
+              DragLeave="Grid_DragLeave"
               Drop="Grid_Drop"
               Background="Transparent"
               Canvas.ZIndex="100">
