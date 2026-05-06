@@ -4,7 +4,7 @@ namespace WhisperGUI
 {
     public partial class App : Application
     {
-        private Window m_window;
+        private Window? m_window;
 
         public App()
         {

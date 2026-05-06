@@ -6,11 +6,11 @@ namespace WhisperGUI.Services
 {
     public class AudioService
     {
-        private WaveInEvent _waveIn;
-        private MemoryStream _audioStream;
-        private WaveFileWriter _waveWriter;
-        
-        public event EventHandler<byte[]> AudioDataAvailable;
+        private WaveInEvent? _waveIn;
+        private MemoryStream? _audioStream;
+        private WaveFileWriter? _waveWriter;
+
+        public event EventHandler<byte[]>? AudioDataAvailable;
 
         public void StartRecording()
         {
@@ -32,7 +32,7 @@ namespace WhisperGUI.Services
             _waveIn.StartRecording();
         }
 
-        private void OnDataAvailable(object sender, WaveInEventArgs e)
+        private void OnDataAvailable(object? sender, WaveInEventArgs e)
         {
             // Make a copy of the buffer to pass out
             byte[] buffer = new byte[e.BytesRecorded];
@@ -48,13 +48,13 @@ namespace WhisperGUI.Services
                 _waveIn.StopRecording();
                 _waveIn.DataAvailable -= OnDataAvailable;
                 _waveIn.Dispose();
-                _waveIn = null;
+                _waveIn = null!;
             }
 
             if (_audioStream != null)
             {
                 _audioStream.Dispose();
-                _audioStream = null;
+                _audioStream = null!;
             }
         }
     }

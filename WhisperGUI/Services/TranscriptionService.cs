@@ -10,12 +10,12 @@ namespace WhisperGUI.Services
 {
     public class TranscriptionService : IDisposable
     {
-        private WhisperFactory _whisperFactory;
-        private WhisperProcessor _processor;
+        private WhisperFactory? _whisperFactory;
+        private WhisperProcessor? _processor;
         // Bug 6 fix: resolve model path relative to app base directory, not working directory
         private readonly string _modelPath;
 
-        public event EventHandler<string> TextRecognized;
+        public event EventHandler<string>? TextRecognized;
 
         public TranscriptionService()
         {
@@ -29,7 +29,8 @@ namespace WhisperGUI.Services
             {
                 var assetsDir = Path.GetDirectoryName(_modelPath)!;
                 if (!Directory.Exists(assetsDir)) Directory.CreateDirectory(assetsDir);
-                using var modelStream = await WhisperGgmlDownloader.GetGgmlModelAsync(GgmlType.Base);
+                using var downloader = new WhisperGgmlDownloader();
+                using var modelStream = await downloader.GetGgmlModelAsync(GgmlType.Base);
                 using var fileWriter = File.OpenWrite(_modelPath);
                 await modelStream.CopyToAsync(fileWriter);
             }

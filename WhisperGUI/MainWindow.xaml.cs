@@ -15,7 +15,7 @@ namespace WhisperGUI
         private AudioService _audioService;
         private TranscriptionService _transcriptionService;
         private bool _isRecording = false;
-        private CancellationTokenSource _cts;
+        private CancellationTokenSource? _cts;
         // Bug 2 fix: accumulate audio chunks during recording
         private List<byte[]> _recordedChunks = new();
 
@@ -60,7 +60,7 @@ namespace WhisperGUI
             }
         }
 
-        private void OnTextRecognized(object sender, string text)
+        private void OnTextRecognized(object? sender, string text)
         {
             DispatcherQueue.TryEnqueue(() =>
             {
@@ -72,7 +72,7 @@ namespace WhisperGUI
         }
 
         // Bug 2 fix: collect audio data during recording
-        private void OnAudioDataAvailable(object sender, byte[] data)
+        private void OnAudioDataAvailable(object? sender, byte[] data)
         {
             _recordedChunks.Add(data);
         }

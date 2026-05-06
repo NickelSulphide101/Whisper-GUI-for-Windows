@@ -9,13 +9,15 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.2.2
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v4
+      uses: actions/setup-dotnet@v4.3.1
       with:
         dotnet-version: '9.0.x'
 
@@ -35,7 +37,7 @@ jobs:
         dotnet publish -c Release -f net9.0-windows10.0.19041.0 /p:GenerateAppxPackageOnBuild=true /p:AppxPackageDir="../AppPackages" /p:AppxBundle=Always /p:PackageCertificateKeyFile="..\WhisperGUI_TemporaryKey.pfx" /p:PackageCertificatePassword="password" /p:UapAppxPackageBuildMode=SideloadOnly
 
     - name: Upload MSIX to Artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v4.6.2
       with:
         name: WhisperGUI-MSIX
         path: AppPackages/**/*.msixbundle
