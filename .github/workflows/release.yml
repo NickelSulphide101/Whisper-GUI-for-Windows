@@ -40,14 +40,14 @@ jobs:
       uses: actions/upload-artifact@v4.6.2
       with:
         name: WhisperGUI-MSIX
-        path: AppPackages/**/*.msixbundle
+        path: AppPackages/**/*.msix*
 
     - name: Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: "build-${{ github.run_number }}"
         name: "Automated Build #${{ github.run_number }}"
-        files: AppPackages/**/*.msixbundle
+        files: AppPackages/**/*.msix*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
