@@ -12,8 +12,9 @@ namespace WhisperGUI.Services
     {
         private WhisperFactory? _whisperFactory;
         private WhisperProcessor? _processor;
-        // Bug 6 fix: resolve model path relative to app base directory, not working directory
         private readonly string _modelPath;
+        // HttpClient should be long-lived; create once and reuse
+        private static readonly HttpClient _httpClient = new();
 
         public event EventHandler<string>? TextRecognized;
 
@@ -29,7 +30,8 @@ namespace WhisperGUI.Services
             {
                 var assetsDir = Path.GetDirectoryName(_modelPath)!;
                 if (!Directory.Exists(assetsDir)) Directory.CreateDirectory(assetsDir);
-                using var downloader = new WhisperGgmlDownloader();
+                // WhisperGgmlDownloader requires an HttpClient and is not IDisposable
+                var downloader = new WhisperGgmlDownloader(_httpClient);
                 using var modelStream = await downloader.GetGgmlModelAsync(GgmlType.Base);
                 using var fileWriter = File.OpenWrite(_modelPath);
                 await modelStream.CopyToAsync(fileWriter);
@@ -103,6 +105,7 @@ namespace WhisperGUI.Services
             }
 
             memStream.Position = 0;
+            if (_processor is null) throw new InvalidOperationException("TranscriptionService not initialized. Call InitializeAsync() first.");
             await foreach (var result in _processor.ProcessAsync(memStream, cancellationToken))
             {
                 TextRecognized?.Invoke(this, $"{result.Start}->{result.End}: {result.Text}");
@@ -136,6 +139,7 @@ namespace WhisperGUI.Services
 
                 // Process the audio file
                 using var fileStream = File.OpenRead(audioFilePath);
+                if (_processor is null) throw new InvalidOperationException("TranscriptionService not initialized. Call InitializeAsync() first.");
                 await foreach (var result in _processor.ProcessAsync(fileStream, cancellationToken))
                 {
                     TextRecognized?.Invoke(this, $"{result.Start}->{result.End}: {result.Text}");

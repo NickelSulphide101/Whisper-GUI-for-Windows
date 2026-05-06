@@ -8,7 +8,6 @@ namespace WhisperGUI.Services
     {
         private WaveInEvent? _waveIn;
         private MemoryStream? _audioStream;
-        private WaveFileWriter? _waveWriter;
 
         public event EventHandler<byte[]>? AudioDataAvailable;
 
