@@ -4,7 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Whisper.net;
 using Whisper.net.Ggml;
-using FFmpegCore;
+using FFMpegCore;
 
 namespace WhisperGUI.Services
 {
